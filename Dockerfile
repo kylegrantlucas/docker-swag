@@ -15,6 +15,8 @@ RUN echo "https://nginx.org/packages/mainline/alpine/v3.14/main" | tee -a /etc/a
 
 RUN wget -O /tmp/nginx_signing.rsa.pub https://nginx.org/keys/nginx_signing.rsa.pub ; mv /tmp/nginx_signing.rsa.pub /etc/apk/keys
 
+RUN mkdir -p /tmp/etc && cp -r /etc/nginx /tmp/etc/nginx
+
 RUN \
   echo "**** install build packages ****" && \
   apk add --no-cache --virtual=build-dependencies \
@@ -152,6 +154,8 @@ RUN \
     do \
     find /usr/lib/python3.*  -iname "${cleanfiles}" -exec rm -f '{}' + \
     ; done && \
+  rm -rf /etc/nginx && \
+  cp -r /tmp/etc/nginx /etc/nginx && \
   rm -rf \
     /tmp/* \
     /root/.cache \
