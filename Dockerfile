@@ -156,6 +156,7 @@ RUN \
     ; done && \
   rm -rf /etc/nginx && \
   cp -r /tmp/etc/nginx /etc/nginx && \
+  mkdir -p /var/cache/nginx/client_temp && \
   rm -rf \
     /tmp/* \
     /root/.cache \
