@@ -76,8 +76,6 @@ cp /config/fail2ban/jail.local /etc/fail2ban/jail.local
     cp /defaults/authelia-server.conf /config/nginx/authelia-server.conf
 [[ ! -f /config/nginx/authelia-location.conf ]] && \
     cp /defaults/authelia-location.conf /config/nginx/authelia-location.conf
-[[ ! -f /config/nginx/geoip2.conf ]] && \
-    cp /defaults/geoip2.conf /config/nginx/geoip2.conf
 [[ ! -f /config/www/502.html ]] &&
     cp /defaults/502.html /config/www/502.html
 
@@ -122,7 +120,7 @@ if ! grep -q 'PARAMETERS' "/config/nginx/dhparams.pem"; then
 fi
 
 # check to make sure DNSPLUGIN is selected if dns validation is used
-[[ "$VALIDATION" = "dns" ]] && [[ ! "$DNSPLUGIN" =~ ^(aliyun|cloudflare|cloudxns|cpanel|digitalocean|directadmin|dnsimple|dnsmadeeasy|domeneshop|gandi|gehirn|google|hetzner|inwx|ionos|linode|luadns|netcup|njalla|nsone|ovh|rfc2136|route53|sakuracloud|transip|vultr)$ ]] && \
+[[ "$VALIDATION" = "dns" ]] && [[ ! "$DNSPLUGIN" =~ ^(aliyun|azure|cloudflare|cloudxns|cpanel|desec|digitalocean|directadmin|dnsimple|dnsmadeeasy|dnspod|domeneshop|dynu|gandi|gehirn|google|he|hetzner|infomaniak|inwx|ionos|linode|loopia|luadns|netcup|njalla|nsone|ovh|rfc2136|route53|sakuracloud|standalone|transip|vultr)$ ]] && \
     echo "Please set the DNSPLUGIN variable to a valid plugin name. See docker info for more details." && \
     sleep infinity
 
@@ -236,12 +234,18 @@ if [ "$VALIDATION" = "dns" ]; then
     elif [[ "$DNSPLUGIN" =~ ^(google)$ ]]; then
         if [ -n "$PROPAGATION" ];then PROPAGATIONPARAM="--dns-${DNSPLUGIN}-propagation-seconds ${PROPAGATION}"; fi
         PREFCHAL="--dns-${DNSPLUGIN} --dns-${DNSPLUGIN}-credentials /config/dns-conf/${DNSPLUGIN}.json ${PROPAGATIONPARAM}"
-    elif [[ "$DNSPLUGIN" =~ ^(aliyun|domeneshop|hetzner|inwx|ionos|netcup|njalla|transip|vultr)$ ]]; then
+    elif [[ "$DNSPLUGIN" =~ ^(aliyun|desec|dnspod|domeneshop|dynu|he|hetzner|infomaniak|inwx|ionos|loopia|netcup|njalla|transip|vultr)$ ]]; then
         if [ -n "$PROPAGATION" ];then PROPAGATIONPARAM="--dns-${DNSPLUGIN}-propagation-seconds ${PROPAGATION}"; fi
         PREFCHAL="-a dns-${DNSPLUGIN} --dns-${DNSPLUGIN}-credentials /config/dns-conf/${DNSPLUGIN}.ini ${PROPAGATIONPARAM}"
+    elif [[ "$DNSPLUGIN" =~ ^(standalone)$ ]]; then
+        if [ -n "$PROPAGATION" ];then echo "standalone dns plugin does not support setting propagation time"; fi
+        PREFCHAL="-a dns-${DNSPLUGIN}"
     elif [[ "$DNSPLUGIN" =~ ^(directadmin)$ ]]; then
         if [ -n "$PROPAGATION" ];then PROPAGATIONPARAM="--${DNSPLUGIN}-propagation-seconds ${PROPAGATION}"; fi
         PREFCHAL="-a ${DNSPLUGIN} --${DNSPLUGIN}-credentials /config/dns-conf/${DNSPLUGIN}.ini ${PROPAGATIONPARAM}"
+    elif [[ "$DNSPLUGIN" =~ ^(azure)$ ]]; then
+        if [ -n "$PROPAGATION" ];then echo "Azure dns plugin does not support setting propagation time"; fi
+        PREFCHAL="-a dns-${DNSPLUGIN} --dns-${DNSPLUGIN}-credentials /config/dns-conf/${DNSPLUGIN}.ini"
     else
         if [ -n "$PROPAGATION" ];then PROPAGATIONPARAM="--dns-${DNSPLUGIN}-propagation-seconds ${PROPAGATION}"; fi
         PREFCHAL="--dns-${DNSPLUGIN} --dns-${DNSPLUGIN}-credentials /config/dns-conf/${DNSPLUGIN}.ini ${PROPAGATIONPARAM}"
@@ -312,6 +316,15 @@ else
     FILENAME="$DNSPLUGIN.ini"
 fi
 
+# Check if the cert is using the old LE root cert, revoke and regen if necessary
+if [ -f "/config/keys/letsencrypt/chain.pem" ] && ([ "${CERTPROVIDER}" == "letsencrypt" ] || [ "${CERTPROVIDER}" == "" ]) && [ "${STAGING}" != "true" ] && ! openssl x509 -in /config/keys/letsencrypt/chain.pem -noout -issuer | grep -q "ISRG Root X"; then
+    echo "The cert seems to be using the old LE root cert, which is no longer valid. Deleting and revoking."
+    REV_ACMESERVER="https://acme-v02.api.letsencrypt.org/directory"
+    certbot revoke --non-interactive --cert-path /config/etc/letsencrypt/live/"$ORIGDOMAIN"/fullchain.pem --server $REV_ACMESERVER
+    rm -rf /config/etc/letsencrypt
+    mkdir -p /config/etc/letsencrypt
+fi
+
 # generating certs if necessary
 if [ ! -f "/config/keys/letsencrypt/fullchain.pem" ]; then
     if [ "$CERTPROVIDER" = "zerossl" ] && [ -n "$EMAIL" ]; then
@@ -353,24 +366,14 @@ fi
     rm -rf /var/lib/libmaxminddb
 [[ ! -d /var/lib/libmaxminddb ]] && \
     ln -s /config/geoip2db /var/lib/libmaxminddb
-# check GeoIP2 database
-if [ -n "$MAXMINDDB_LICENSE_KEY" ]; then
-    sed -i "s|.*MAXMINDDB_LICENSE_KEY.*|MAXMINDDB_LICENSE_KEY=\"${MAXMINDDB_LICENSE_KEY}\"|g" /etc/libmaxminddb.cron.conf
-    if [ ! -f /var/lib/libmaxminddb/GeoLite2-City.mmdb ]; then
-        echo "Downloading GeoIP2 City database."
-        /etc/periodic/weekly/libmaxminddb
-    fi
-elif [ -f /var/lib/libmaxminddb/GeoLite2-City.mmdb ]; then
-    echo -e "Currently using the user provided GeoLite2-City.mmdb.\nIf you want to enable weekly auto-updates of the database, retrieve a free license key from MaxMind,\nand add a new env variable \"MAXMINDDB_LICENSE_KEY\", set to your license key."
-else
-    echo -e "Starting 2019/12/30, GeoIP2 databases require personal license key to download. Please retrieve a free license key from MaxMind,\nand add a new env variable \"MAXMINDDB_LICENSE_KEY\", set to your license key."
-fi
 
 # logfiles needed by fail2ban
 [[ ! -f /config/log/nginx/error.log ]] && \
     touch /config/log/nginx/error.log
 [[ ! -f /config/log/nginx/access.log ]] && \
     touch /config/log/nginx/access.log
+[[ ! -f /config/log/nginx/unauthorized.log ]] && \
+    touch /config/log/nginx/unauthorized.log
 
 # permissions
 chown -R abc:abc \

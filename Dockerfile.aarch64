@@ -18,6 +18,8 @@ RUN \
     g++ \
     gcc \
     libffi-dev \
+    libxml2-dev \
+    libxslt-dev \
     openssl-dev \
     python3-dev && \
   echo "**** install runtime packages ****" && \
@@ -99,19 +101,26 @@ RUN \
   pip3 install -U --find-links https://wheel-index.linuxserver.io/alpine/ \
     ${CERTBOT} \
     certbot-dns-aliyun \
+    certbot-dns-azure \
     certbot-dns-cloudflare \
     certbot-dns-cloudxns \
     certbot-dns-cpanel \
+    certbot-dns-desec \
     certbot-dns-digitalocean \
     certbot-dns-directadmin \
     certbot-dns-dnsimple \
     certbot-dns-dnsmadeeasy \
+    certbot-dns-dnspod \
     certbot-dns-domeneshop \
+    certbot-dns-dynu \
     certbot-dns-google \
+    certbot-dns-he \
     certbot-dns-hetzner \
+    certbot-dns-infomaniak \
     certbot-dns-inwx \
     certbot-dns-ionos \
     certbot-dns-linode \
+    certbot-dns-loopia \
     certbot-dns-luadns \
     certbot-dns-netcup \
     certbot-dns-njalla \
@@ -119,11 +128,18 @@ RUN \
     certbot-dns-ovh \
     certbot-dns-rfc2136 \
     certbot-dns-route53 \
+    certbot-dns-standalone \
     certbot-dns-transip \
     certbot-dns-vultr \
+    certbot-dns-desec \
     certbot-plugin-gandi \
     cryptography \
     requests && \
+  echo "**** correct ip6tables legacy issue ****" && \
+  rm \ 
+    /sbin/ip6tables && \
+  ln -s \
+    /sbin/ip6tables-nft /sbin/ip6tables && \
   echo "**** remove unnecessary fail2ban filters ****" && \
   rm \
     /etc/fail2ban/jail.d/alpine-ssh.conf && \
