@@ -11,7 +11,7 @@ LABEL maintainer="nemchik"
 ENV DHLEVEL=2048 ONLY_SUBDOMAINS=false AWS_CONFIG_FILE=/config/dns-conf/route53.ini
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
-RUN echo "https://nginx.org/packages/mainline/alpine/v3.14/main" | tee -a /etc/apk/repositories >/dev/null
+RUN echo "https://nginx.org/packages/mainline/alpine/v3.15/main" | tee -a /etc/apk/repositories >/dev/null
 
 RUN wget -O /tmp/nginx_signing.rsa.pub https://nginx.org/keys/nginx_signing.rsa.pub ; mv /tmp/nginx_signing.rsa.pub /etc/apk/keys
 
