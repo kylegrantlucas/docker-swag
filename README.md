@@ -63,14 +63,16 @@ The architectures supported by this image are:
 ### Validation and initial setup
 
 * Before running this container, make sure that the url and subdomains are properly forwarded to this container's host, and that port 443 (and/or 80) is not being used by another service on the host (NAS gui, another webserver, etc.).
+* If you need a dynamic dns provider, you can use the free provider duckdns.org where the `URL` will be `yoursubdomain.duckdns.org` and the `SUBDOMAINS` can be `www,ftp,cloud` with http validation, or `wildcard` with dns validation. You can use our [duckdns image](https://hub.docker.com/r/linuxserver/duckdns/) to update your IP on duckdns.org.
 * For `http` validation, port 80 on the internet side of the router should be forwarded to this container's port 80
 * For `dns` validation, make sure to enter your credentials into the corresponding ini (or json for some plugins) file under `/config/dns-conf`
   * Cloudflare provides free accounts for managing dns and is very easy to use with this image. Make sure that it is set up for "dns only" instead of "dns + proxy"
   * Google dns plugin is meant to be used with "Google Cloud DNS", a paid enterprise product, and not for "Google Domains DNS"
-* For `duckdns` validation, either leave the `SUBDOMAINS` variable empty or set it to `wildcard`, and set the `DUCKDNSTOKEN` variable with your duckdns token. Due to a limitation of duckdns, the resulting cert will only cover either main subdomain (ie. `yoursubdomain.duckdns.org`), or sub-subdomains (ie. `*.yoursubdomain.duckdns.org`), but will not both at the same time. You can use our [duckdns image](https://hub.docker.com/r/linuxserver/duckdns/) to update your IP on duckdns.org.
+  * DuckDNS only supoprts two types of DNS validated certificates (not both at the same time):
+    1. Certs that only cover your main subdomain (ie. `yoursubdomain.duckdns.org`, leave the `SUBDOMAINS` variable empty)
+    2. Certs that cover sub-subdomains of your main subdomain (ie. `*.yoursubdomain.duckdns.org`, set the `SUBDOMAINS` variable to `wildcard`)
 * `--cap-add=NET_ADMIN` is required for fail2ban to modify iptables
-* If you need a dynamic dns provider, you can use the free provider duckdns.org where the `URL` will be `yoursubdomain.duckdns.org` and the `SUBDOMAINS` can be `www,ftp,cloud` with http validation, or `wildcard` with dns validation.
-* After setup, navigate to `https://yourdomain.url` to access the default homepage (http access through port 80 is disabled by default, you can enable it by editing the default site config at `/config/nginx/site-confs/default`).
+* After setup, navigate to `https://yourdomain.url` to access the default homepage (http access through port 80 is disabled by default, you can enable it by editing the default site config at `/config/nginx/site-confs/default.conf`).
 * Certs are checked nightly and if expiration is within 30 days, renewal is attempted. If your cert is about to expire in less than 30 days, check the logs under `/config/log/letsencrypt` to see why the renewals have been failing. It is recommended to input your e-mail in docker parameters so you receive expiration notices from Let's Encrypt in those circumstances.
 
 ### Security and password protection
@@ -83,7 +85,7 @@ The architectures supported by this image are:
 
 ### Site config and reverse proxy
 
-* The default site config resides at `/config/nginx/site-confs/default`. Feel free to modify this file, and you can add other conf files to this directory. However, if you delete the `default` file, a new default will be created on container start.
+* The default site config resides at `/config/nginx/site-confs/default.conf`. Feel free to modify this file, and you can add other conf files to this directory. However, if you delete the `default` file, a new default will be created on container start.
 * Preset reverse proxy config files are added for popular apps. See the `README.md` file under `/config/nginx/proxy_confs` for instructions on how to enable them. The preset confs reside in and get imported from [this repo](https://github.com/linuxserver/reverse-proxy-confs).
 * If you wish to hide your site from search engine crawlers, you may find it useful to add this configuration line to your site config, within the server block, above the line where ssl.conf is included
 `add_header X-Robots-Tag "noindex, nofollow, nosnippet, noarchive";`
@@ -114,7 +116,7 @@ This will *ask* Google et al not to index and list your site. Be careful with th
 * You can check which jails are active via `docker exec -it swag fail2ban-client status`
 * You can check the status of a specific jail via `docker exec -it swag fail2ban-client status <jail name>`
 * You can unban an IP via `docker exec -it swag fail2ban-client set <jail name> unbanip <IP>`
-* A list of commands can be found here: https://www.fail2ban.org/wiki/index.php/Commands
+* A list of commands can be found here: <https://www.fail2ban.org/wiki/index.php/Commands>
 
 ### Updating configs
 
@@ -131,6 +133,7 @@ This will *ask* Google et al not to index and list your site. Be careful with th
 * You can check the new sample and adjust your active config as needed.
 
 ### Migration from the old `linuxserver/letsencrypt` image
+
 Please follow the instructions [on this blog post](https://www.linuxserver.io/blog/2020-08-21-introducing-swag#migrate).
 
 ## Usage
@@ -158,7 +161,6 @@ services:
       - CERTPROVIDER= #optional
       - DNSPLUGIN=cloudflare #optional
       - PROPAGATION= #optional
-      - DUCKDNSTOKEN= #optional
       - EMAIL= #optional
       - ONLY_SUBDOMAINS=false #optional
       - EXTRA_DOMAINS= #optional
@@ -186,7 +188,6 @@ docker run -d \
   -e CERTPROVIDER= `#optional` \
   -e DNSPLUGIN=cloudflare `#optional` \
   -e PROPAGATION= `#optional` \
-  -e DUCKDNSTOKEN= `#optional` \
   -e EMAIL= `#optional` \
   -e ONLY_SUBDOMAINS=false `#optional` \
   -e EXTRA_DOMAINS= `#optional` \
@@ -210,12 +211,11 @@ Container images are configured using parameters passed at runtime (such as thos
 | `-e PGID=1000` | for GroupID - see below for explanation |
 | `-e TZ=Europe/London` | Specify a timezone to use EG Europe/London. |
 | `-e URL=yourdomain.url` | Top url you have control over (`customdomain.com` if you own it, or `customsubdomain.ddnsprovider.com` if dynamic dns). |
-| `-e VALIDATION=http` | Certbot validation method to use, options are `http`, `dns` or `duckdns` (`dns` method also requires `DNSPLUGIN` variable set) (`duckdns` method requires `DUCKDNSTOKEN` variable set, and the `SUBDOMAINS` variable must be either empty or set to `wildcard`). |
-| `-e SUBDOMAINS=www,` | Subdomains you'd like the cert to cover (comma separated, no spaces) ie. `www,ftp,cloud`. For a wildcard cert, set this _exactly_ to `wildcard` (wildcard cert is available via `dns` and `duckdns` validation only) |
+| `-e VALIDATION=http` | Certbot validation method to use, options are `http` or `dns` (`dns` method also requires `DNSPLUGIN` variable set). |
+| `-e SUBDOMAINS=www,` | Subdomains you'd like the cert to cover (comma separated, no spaces) ie. `www,ftp,cloud`. For a wildcard cert, set this *exactly* to `wildcard` (wildcard cert is available via `dns` validation only) |
 | `-e CERTPROVIDER=` | Optionally define the cert provider. Set to `zerossl` for ZeroSSL certs (requires existing [ZeroSSL account](https://app.zerossl.com/signup) and the e-mail address entered in `EMAIL` env var). Otherwise defaults to Let's Encrypt. |
-| `-e DNSPLUGIN=cloudflare` | Required if `VALIDATION` is set to `dns`. Options are `aliyun`, `azure`, `cloudflare`, `cloudxns`, `cpanel`, `desec`, `digitalocean`, `directadmin`, `dnsimple`, `dnsmadeeasy`, `dnspod`, `domeneshop`, `dynu`, `gandi`, `gehirn`, `google`, `he`, `hetzner`, `infomaniak`, `inwx`, `ionos`, `linode`, `loopia`, `luadns`, `netcup`, `njalla`, `nsone`, `ovh`, `rfc2136`, `route53`, `sakuracloud`, `standalone`, `transip` and `vultr`. Also need to enter the credentials into the corresponding ini (or json for some plugins) file under `/config/dns-conf`. |
+| `-e DNSPLUGIN=cloudflare` | Required if `VALIDATION` is set to `dns`. Options are `acmedns`, `aliyun`, `azure`, `cloudflare`, `cloudxns`, `cpanel`, `desec`, `digitalocean`, `directadmin`, `dnsimple`, `dnsmadeeasy`, `dnspod`, `do`, `domeneshop`, `duckdns`, `dynu`, `gandi`, `gehirn`, `godaddy`, `google`, `he`, `hetzner`, `infomaniak`, `inwx`, `ionos`, `linode`, `loopia`, `luadns`, `netcup`, `njalla`, `nsone`, `ovh`, `porkbun`, `rfc2136`, `route53`, `sakuracloud`, `standalone`, `transip`, and `vultr`. Also need to enter the credentials into the corresponding ini (or json for some plugins) file under `/config/dns-conf`. |
 | `-e PROPAGATION=` | Optionally override (in seconds) the default propagation time for the dns plugins. |
-| `-e DUCKDNSTOKEN=` | Required if `VALIDATION` is set to `duckdns`. Retrieve your token from https://www.duckdns.org |
 | `-e EMAIL=` | Optional e-mail address used for cert expiration notifications (Required for ZeroSSL). |
 | `-e ONLY_SUBDOMAINS=false` | If you wish to get certs only for certain subdomains, but not the main domain (main domain may be hosted on another machine and cannot be validated), set this to `true` |
 | `-e EXTRA_DOMAINS=` | Additional fully qualified domain names (comma separated, no spaces) ie. `extradomain.com,subdomain.anotherdomain.org,*.anotherdomain.org` |
@@ -335,6 +335,13 @@ Once registered you can define the dockerfile to use with `-f Dockerfile.aarch64
 
 ## Versions
 
+* **06.10.22:** - Switch to certbot-dns-duckdns. Update cpanel and gandi dns plugin handling. Minor adjustments to init logic.
+* **05.10.22:** - Use certbot file hooks instead of command line hooks
+* **04.10.22:** - Add godaddy and porkbun dns plugins.
+* **03.10.22:** - Add default_server back to default site conf's https listen.
+* **22.09.22:** - Added support for DO DNS validation.
+* **22.09.22:** - Added certbot-dns-acmedns for DNS01 validation.
+* **20.08.22:** - [Existing users should update:](https://github.com/linuxserver/docker-swag/blob/master/README.md#updating-configs) nginx.conf - Rebasing to alpine 3.15 with php8. Restructure nginx configs ([see changes announcement](https://info.linuxserver.io/issues/2022-08-20-nginx-base)).
 * **10.08.22:** - Added support for Dynu DNS validation.
 * **18.05.22:** - Added support for Azure DNS validation.
 * **09.04.22:** - Added certbot-dns-loopia for DNS01 validation.
@@ -346,7 +353,7 @@ Once registered you can define the dockerfile to use with `-f Dockerfile.aarch64
 * **22.11.21:** - Added support for Infomaniak DNS for certificate generation.
 * **20.11.21:** - Added support for dnspod validation.
 * **15.11.21:** - Added support for deSEC DNS for wildcard certificate generation.
-* **26.10.21:** - [Existing users should update:](https://github.com/linuxserver/docker-swag/blob/master/README.md#updating-configs) proxy.conf - Mitigate https://httpoxy.org/ vulnerabilities. Ref: https://www.nginx.com/blog/mitigating-the-httpoxy-vulnerability-with-nginx#Defeating-the-Attack-using-NGINX-and-NGINX-Plus
+* **26.10.21:** - [Existing users should update:](https://github.com/linuxserver/docker-swag/blob/master/README.md#updating-configs) proxy.conf - Mitigate <https://httpoxy.org/> vulnerabilities. Ref: <https://www.nginx.com/blog/mitigating-the-httpoxy-vulnerability-with-nginx#Defeating-the-Attack-using-NGINX-and-NGINX-Plus>
 * **23.10.21:** - Fix Hurricane Electric (HE) DNS validation.
 * **12.10.21:** - Fix deprecated LE root cert check to fix failures when using `STAGING=true`, and failures in revoking.
 * **06.10.21:** - Added support for Hurricane Electric (HE) DNS validation. Added lxml build deps.
@@ -370,7 +377,7 @@ Once registered you can define the dockerfile to use with `-f Dockerfile.aarch64
 * **26.01.21:** - Add support for hetzner dns validation.
 * **20.01.21:** - Add check for ZeroSSL EAB retrieval.
 * **08.01.21:** - Add support for getting certs from [ZeroSSL](https://zerossl.com/) via optional `CERTPROVIDER` env var. Update aliyun, domeneshop, inwx and transip dns plugins with the new plugin names. Hide `donoteditthisfile.conf` because users were editing it despite its name. Suppress harmless error when no proxy confs are enabled.
-* **03.01.21:** - [Existing users should update:](https://github.com/linuxserver/docker-swag/blob/master/README.md#updating-configs) /config/nginx/site-confs/default - Add helper pages to aid troubleshooting
+* **03.01.21:** - [Existing users should update:](https://github.com/linuxserver/docker-swag/blob/master/README.md#updating-configs) /config/nginx/site-confs/default.conf - Add helper pages to aid troubleshooting
 * **10.12.20:** - Add support for njalla dns validation
 * **09.12.20:** - Check for template/conf updates and notify in the log. Add support for gehirn and sakuracloud dns validation.
 * **01.11.20:** - Add support for netcup dns validation
