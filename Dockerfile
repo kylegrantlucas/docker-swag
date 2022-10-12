@@ -34,7 +34,7 @@ RUN \
     fail2ban \
     gnupg \
     memcached \
-    nginx \
+    nginx=1.21.6-r1 \
     nginx-mod-http-brotli \
     nginx-mod-http-dav-ext \
     nginx-mod-http-echo \
